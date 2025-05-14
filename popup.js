@@ -9,7 +9,25 @@
  * Licensed under the MIT License
  */
 
-document.getElementById('export-md').addEventListener('click', function() {
+// Add event listener for Markdown export
+document.addEventListener('DOMContentLoaded', function() {
+  const mdButton = document.getElementById('export-md');
+  const pdfButton = document.getElementById('export-pdf');
+  
+  if (mdButton) {
+    mdButton.addEventListener('click', function() {
+      executeExport('md');
+    });
+  }
+  
+  if (pdfButton) {
+    pdfButton.addEventListener('click', function() {
+      executeExport('pdf');
+    });
+  }
+});
+
+function executeExport(format) {
   chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
     chrome.scripting.executeScript({
       target: {tabId: tabs[0].id},
@@ -17,13 +35,14 @@ document.getElementById('export-md').addEventListener('click', function() {
     }).then(() => {
       chrome.scripting.executeScript({
         target: {tabId: tabs[0].id},
-        function: exportAsMarkdown
+        function: exportAs,
+        args: [format]
       });
     });
   });
-});
+}
 
-function exportAsMarkdown() {
+function exportAs(format) {
   // Get chat elements
   const container = document.querySelector("div.flex-1.flex.flex-col.gap-3.px-4");
   if (!container) {
@@ -81,6 +100,10 @@ function exportAsMarkdown() {
     markdownContent += "\n";
   }
   
-  // Save markdown content to file
-  saveToFile(markdownContent, "md", title);
+  // Save content based on format
+  if (format === "pdf") {
+    generatePDF(markdownContent, title);
+  } else {
+    saveToFile(markdownContent, "md", title);
+  }
 }

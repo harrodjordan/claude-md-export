@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Claude Markdown Export",
   "version": "1.0.0",
-  "description": "Export Claude conversations to Markdown format",
+  "description": "Export Claude conversations to Markdown or PDF format",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
@@ -23,5 +23,8 @@
       "matches": ["https://claude.ai/*"],
       "js": ["content.js", "utils.js"]
     }
-  ]
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'unsafe-eval' https://cdnjs.cloudflare.com; object-src 'self'"
+  }
 }
