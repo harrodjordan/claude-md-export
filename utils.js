@@ -1,3 +1,14 @@
+/**
+ * Claude Markdown Export - Utils
+ * 
+ * Markdown export utilities derived from the claude-export project
+ * https://github.com/ryanschiang/claude-export
+ * 
+ * Original work Copyright (c) 2023 Ryan Chiang
+ * Modified work Copyright (c) 2024 Jordan Harrod
+ * Licensed under the MIT License
+ */
+
 // Helper function to get formatted date time
 function getFormattedDateTime() {
   const now = new Date();

@@ -1,3 +1,14 @@
+/**
+ * Claude Markdown Export - Popup Script
+ * 
+ * Extension popup interface derived from the claude-export project
+ * https://github.com/ryanschiang/claude-export
+ * 
+ * Original work Copyright (c) 2023 Ryan Chiang
+ * Modified work Copyright (c) 2024 Jordan Harrod
+ * Licensed under the MIT License
+ */
+
 document.getElementById('export-md').addEventListener('click', function() {
   chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
     chrome.scripting.executeScript({

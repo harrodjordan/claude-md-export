@@ -1,3 +1,14 @@
+/**
+ * Claude Markdown Export - Content Script
+ * 
+ * Content injection script derived from the claude-export project
+ * https://github.com/ryanschiang/claude-export
+ * 
+ * Original work Copyright (c) 2023 Ryan Chiang
+ * Modified work Copyright (c) 2024 Jordan Harrod
+ * Licensed under the MIT License
+ */
+
 function addExportButton() {
   // Check if we're on a chat page
   if (window.location.href.includes('claude.ai/chat')) {
