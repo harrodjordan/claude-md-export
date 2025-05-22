@@ -22,7 +22,8 @@ function addExportButtons() {
     buttonContainer.style.right = '20px';
     buttonContainer.style.zIndex = '9999';
     buttonContainer.style.display = 'flex';
-    buttonContainer.style.gap = '10px';
+    buttonContainer.style.flexDirection = 'column';
+    buttonContainer.style.gap = '8px';
     
     // Create Markdown export button
     const mdButton = document.createElement('button');
