@@ -6,28 +6,27 @@
  * 
  * Original work Copyright (c) 2023 Ryan Chiang
  * Modified work Copyright (c) 2024 Jordan Harrod
- * Licensed under the MIT License
  */
 
 // Add event listener for Markdown export
 document.addEventListener('DOMContentLoaded', function() {
   const mdButton = document.getElementById('export-md');
-  const pdfButton = document.getElementById('export-pdf');
+  const noThinkingButton = document.getElementById('export-no-thinking');
   
   if (mdButton) {
     mdButton.addEventListener('click', function() {
-      executeExport('md');
+      executeExport('md', false);
     });
   }
   
-  if (pdfButton) {
-    pdfButton.addEventListener('click', function() {
-      executeExport('pdf');
+  if (noThinkingButton) {
+    noThinkingButton.addEventListener('click', function() {
+      executeExport('md', true);
     });
   }
 });
 
-function executeExport(format) {
+function executeExport(format, excludeThinking = false) {
   chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
     chrome.scripting.executeScript({
       target: {tabId: tabs[0].id},
@@ -36,13 +35,13 @@ function executeExport(format) {
       chrome.scripting.executeScript({
         target: {tabId: tabs[0].id},
         function: exportAs,
-        args: [format]
+        args: [format, excludeThinking]
       });
     });
   });
 }
 
-function exportAs(format) {
+function exportAs(format, excludeThinking = false) {
   // Get chat elements
   const container = document.querySelector("div.flex-1.flex.flex-col.gap-3.px-4");
   if (!container) {
@@ -65,13 +64,43 @@ function exportAs(format) {
     if (element.classList.contains("font-claude-message")) {
       markdownContent += "_Claude_:\n";
       
-      // Find all content elements inside Claude's message
-      const contentNodes = element.querySelectorAll("p, ol, ul, pre, table");
+      // First, check for thinking panel (collapsible section with thinking content)
+      const thinkingPanel = element.querySelector('div[class*="font-tiempos"]');
+      const hasThinkingPanel = thinkingPanel !== null;
+      
+      if (hasThinkingPanel && !excludeThinking) {
+        // Extract thinking content from the panel (whether open or closed)
+        const thinkingContent = thinkingPanel.querySelectorAll("p, ol, ul, pre, table");
+        if (thinkingContent.length > 0) {
+          markdownContent += "\n**Thinking:**\n";
+          thinkingContent.forEach(node => {
+            const processedContent = processContentNode(node, markdownContent, false);
+            markdownContent += processedContent;
+          });
+          markdownContent += "\n**Response:**\n";
+        }
+      }
+      
+      // Now process the main response content
+      // Get all content nodes but exclude those within the thinking panel
+      let contentNodes;
+      if (hasThinkingPanel) {
+        // Get all nodes and filter out those inside the thinking panel
+        const allNodes = element.querySelectorAll("p, ol, ul, pre, table");
+        contentNodes = Array.from(allNodes).filter(node => {
+          // Check if this node is inside the thinking panel
+          return !thinkingPanel.contains(node);
+        });
+      } else {
+        // No thinking panel, get all content nodes
+        contentNodes = element.querySelectorAll("p, ol, ul, pre, table");
+      }
       
       if (contentNodes.length > 0) {
         // Process each content node
         contentNodes.forEach(node => {
-          markdownContent += processContentNode(node, markdownContent);
+          const processedContent = processContentNode(node, markdownContent, false);
+          markdownContent += processedContent;
         });
       } else {
         // Fallback: try to get the text content directly
@@ -88,7 +117,8 @@ function exportAs(format) {
       if (contentNodes.length > 0) {
         // Process each content node
         contentNodes.forEach(node => {
-          markdownContent += processContentNode(node, markdownContent);
+          const processedContent = processContentNode(node, markdownContent, excludeThinking);
+          markdownContent += processedContent;
         });
       } else {
         // Fallback: get text content directly
@@ -100,10 +130,7 @@ function exportAs(format) {
     markdownContent += "\n";
   }
   
-  // Save content based on format
-  if (format === "pdf") {
-    generatePDF(markdownContent, title);
-  } else {
-    saveToFile(markdownContent, "md", title);
-  }
+  // Save content to file
+  const filename = excludeThinking ? `${title}-no-thinking` : title;
+  saveToFile(markdownContent, "md", filename);
 }

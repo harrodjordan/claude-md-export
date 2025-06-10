@@ -6,23 +6,180 @@
  * 
  * Original work Copyright (c) 2023 Ryan Chiang
  * Modified work Copyright (c) 2024 Jordan Harrod
- * Licensed under the MIT License
  */
 
-// Load PDF library
-function loadPDFLibrary(callback) {
-  if (typeof html2pdf !== 'undefined') {
-    callback();
+// Native PDF generation using print dialog
+function generatePDFNative(htmlContent, title) {
+  // Create a new window for printing
+  const printWindow = window.open('', '_blank');
+  
+  if (!printWindow) {
+    alert('Please allow popups for this site to generate PDFs');
     return;
   }
   
-  const script = document.createElement('script');
-  script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
-  script.onload = callback;
-  script.onerror = function() {
-    alert('Failed to load PDF library. Please check your internet connection and try again.');
-  };
-  document.head.appendChild(script);
+  // Build the HTML document with print-optimized styles
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <title>${title || 'Claude Export'}</title>
+      <style>
+        @media print {
+          body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            font-size: 12pt;
+            line-height: 1.6;
+            color: #000;
+            background: #fff;
+          }
+          
+          h1, h2, h3 {
+            page-break-after: avoid;
+            margin-top: 20px;
+            margin-bottom: 10px;
+          }
+          
+          pre, code {
+            page-break-inside: avoid;
+          }
+          
+          pre {
+            background-color: #f4f4f4;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-wrap: break-word;
+            white-space: pre-wrap;
+            margin: 10px 0;
+          }
+          
+          code {
+            background-color: #f4f4f4;
+            padding: 2px 4px;
+            border-radius: 2px;
+            font-family: Consolas, Monaco, monospace;
+            font-size: 0.9em;
+          }
+          
+          pre code {
+            background: none;
+            padding: 0;
+          }
+          
+          .message-prompt, .message-claude {
+            font-weight: bold;
+            margin-top: 20px;
+            margin-bottom: 10px;
+            page-break-after: avoid;
+          }
+          
+          .message-prompt {
+            color: #2563eb;
+          }
+          
+          .message-claude {
+            color: #7c3aed;
+          }
+          
+          table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 10px 0;
+          }
+          
+          th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+          }
+          
+          th {
+            background-color: #f4f4f4;
+          }
+          
+          @page {
+            margin: 0.5in;
+          }
+        }
+        
+        /* Screen styles for preview */
+        body {
+          max-width: 800px;
+          margin: 0 auto;
+          padding: 20px;
+          font-family: Arial, sans-serif;
+          line-height: 1.6;
+        }
+        
+        pre {
+          background-color: #f4f4f4;
+          padding: 10px;
+          border-radius: 4px;
+          overflow: auto;
+        }
+        
+        code {
+          background-color: #f4f4f4;
+          padding: 2px 4px;
+          border-radius: 2px;
+          font-family: Consolas, Monaco, monospace;
+        }
+        
+        pre code {
+          background: none;
+          padding: 0;
+        }
+        
+        .message-prompt {
+          font-weight: bold;
+          margin-top: 20px;
+          margin-bottom: 10px;
+          color: #2563eb;
+        }
+        
+        .message-claude {
+          font-weight: bold;
+          margin-top: 20px;
+          margin-bottom: 10px;
+          color: #7c3aed;
+        }
+      </style>
+    </head>
+    <body>
+      ${htmlContent}
+      <script>
+        // Auto-trigger print dialog after a short delay
+        setTimeout(() => {
+          window.print();
+          // Close window after print dialog is closed
+          window.onafterprint = () => window.close();
+        }, 500);
+      </script>
+    </body>
+    </html>
+  `;
+  
+  printWindow.document.write(html);
+  printWindow.document.close();
+}
+
+// Alternative PDF generation using markdown fallback
+function generatePDFMarkdownFallback(markdownContent, title) {
+  try {
+    // Save as markdown file instead
+    saveToFile(markdownContent, "md", title);
+    
+    // Show instructions
+    setTimeout(() => {
+      alert('PDF generation requires popups to be enabled.\n\nMarkdown file has been downloaded instead.\n\nTo convert to PDF:\n1. Open the markdown file in a markdown viewer\n2. Print or export to PDF from there');
+    }, 100);
+  } catch (error) {
+    console.error('Fallback export error:', error);
+    alert('Failed to export. Please try again.');
+  }
 }
 
 // Helper function to get formatted date time
@@ -60,7 +217,7 @@ function saveToFile(content, fileType, title) {
 }
 
 // Process Claude's message content (paragraph, list, code block, etc.)
-function processContentNode(node, markdownContent) {
+function processContentNode(node, markdownContent, excludeThinking = false) {
   const tagName = node.tagName;
   
   // Handle different element types
@@ -192,76 +349,37 @@ function processContentForPDF(container, markdownContent) {
   return htmlContent;
 }
 
-// Generate PDF from markdown content with enhanced HTML rendering
+// Generate PDF from markdown content with native browser printing
 function generatePDF(markdownContent, title) {
-  loadPDFLibrary(() => {
-    try {
-      // Get the chat container to extract artifacts and graphics
-      const container = document.querySelector("div.flex-1.flex.flex-col.gap-3.px-4");
-      
-      // Create a container for the PDF content
-      const pdfContainer = document.createElement('div');
-      pdfContainer.style.fontFamily = 'Arial, sans-serif';
-      pdfContainer.style.maxWidth = '800px';
-      pdfContainer.style.margin = '0 auto';
-      pdfContainer.style.padding = '20px';
-      
-      // Process the content to extract artifacts
-      const htmlContent = processContentForPDF(container, markdownContent);
-      pdfContainer.innerHTML = htmlContent;
+  try {
+    // Get the chat container to extract artifacts and graphics
+    const container = document.querySelector("div.flex-1.flex.flex-col.gap-3.px-4");
     
-    // Style the content for PDF
-    pdfContainer.querySelectorAll('pre').forEach(pre => {
-      pre.style.backgroundColor = '#f4f4f4';
-      pre.style.padding = '10px';
-      pre.style.borderRadius = '4px';
-      pre.style.overflow = 'auto';
-      pre.style.marginBottom = '10px';
-    });
+    // Process the content to extract artifacts
+    const htmlContent = processContentForPDF(container, markdownContent);
     
-    pdfContainer.querySelectorAll('code').forEach(code => {
-      if (!code.parentElement.matches('pre')) {
-        code.style.backgroundColor = '#f4f4f4';
-        code.style.padding = '2px 4px';
-        code.style.borderRadius = '2px';
-        code.style.fontFamily = 'Consolas, Monaco, monospace';
-      }
-    });
+    // Try native PDF generation first
+    const printWindow = window.open('', '_blank');
     
-    // Style messages
-    pdfContainer.querySelectorAll('.message-prompt').forEach(prompt => {
-      prompt.style.fontWeight = 'bold';
-      prompt.style.marginTop = '20px';
-      prompt.style.marginBottom = '10px';
-    });
-    
-    pdfContainer.querySelectorAll('.message-claude').forEach(claude => {
-      claude.style.fontWeight = 'bold';
-      claude.style.marginTop = '20px';
-      claude.style.marginBottom = '10px';
-    });
-    
-    let pdfFileName = title ? 
-      title.trim().toLowerCase().replace(/[^\w\d]+/g, '-') : 
-      'claude';
-    
-    // Ensure filename is not empty
-    if (!pdfFileName) pdfFileName = 'claude';
-    
-    const opt = {
-      margin: 0.5,
-      filename: pdfFileName + '.pdf',
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true },
-      jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
-    };
-    
-      html2pdf().from(pdfContainer).set(opt).save();
-    } catch (error) {
-      console.error('PDF generation error:', error);
-      alert('Failed to generate PDF. Please try again.');
+    if (!printWindow) {
+      // Fallback to markdown export if popups are blocked
+      generatePDFMarkdownFallback(markdownContent, title);
+      return;
     }
-  });
+    
+    // Continue with native approach
+    printWindow.close(); // Close the test window
+    generatePDFNative(htmlContent, title);
+  } catch (error) {
+    console.error('PDF generation error:', error);
+    // Try fallback approach
+    try {
+      generatePDFMarkdownFallback(markdownContent, title);
+    } catch (fallbackError) {
+      console.error('Fallback export error:', fallbackError);
+      alert('Failed to export. Please try again.');
+    }
+  }
 }
 
 // Helper function to escape HTML

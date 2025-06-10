@@ -37,9 +37,18 @@ This extension is based on the [claude-export](https://github.com/ryanschiang/cl
 - Added floating button UI directly in the Claude interface
 - Added extension popup interface
 
-## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+## Roadmap
+
+See [ROADMAP.md](ROADMAP.md) for planned features and development timeline, including:
+- Multi-tier export system with AI-compressed summaries
+- Token estimation and context window management
+- Adaptive DOM detection for resilience to UI changes
+- Claude API integration for intelligent summarization
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request. Check the roadmap for priority areas.
 
 ## Related Projects
 
