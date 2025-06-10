@@ -8,11 +8,14 @@ Claude Markdown Export is a Chrome extension (Manifest V3) that adds functionali
 
 ## Key Features
 
-- Adds a floating "Export as Markdown" button to Claude chat pages
+- Adds a floating export panel to Claude chat pages with two options:
+  - "Export as Markdown" - Full conversation including thinking sections
+  - "Export (No Thinking)" - Conversation without Claude's thinking process
 - Exports entire conversations with proper formatting
 - Preserves structure of both user prompts and Claude responses
 - Handles various content types (text, lists, code blocks, tables)
 - Automatically names files based on chat title
+- Smart detection of thinking panels (works whether open or closed)
 
 ## Codebase Structure
 
@@ -41,3 +44,19 @@ Claude Markdown Export is a Chrome extension (Manifest V3) that adds functionali
 
 - If the export button doesn't appear, ensure the content.js selectors match Claude's current DOM structure
 - Claude's web interface may change, requiring selector updates in content.js and popup.js
+- Thinking detection relies on finding elements with class "font-tiempos" - if Claude changes this, the detection will need updating
+
+## Recent Changes
+
+- Removed PDF export functionality (was unreliable due to browser security constraints)
+- Added "Export (No Thinking)" option that filters out thinking sections
+- Implemented detection of thinking panels that works regardless of open/closed state
+- Removed MIT license as this is now a private repository
+
+## Future Development
+
+See ROADMAP.md for planned features including:
+- Multi-tier export system with AI-compressed summaries
+- Claude API integration for intelligent conversation compression
+- Adaptive DOM detection for resilience to UI changes
+- Token estimation and context window management
