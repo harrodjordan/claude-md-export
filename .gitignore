@@ -17,3 +17,4 @@ npm-debug.log*
 # Build files
 dist/
 build/
+archive/

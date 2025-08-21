@@ -1,11 +1,7 @@
 /**
- * Claude Markdown Export - Content Script
+ * Claude Markdown Export - Content Script (Updated)
  * 
- * Content injection script derived from the claude-export project
- * https://github.com/ryanschiang/claude-export
- * 
- * Original work Copyright (c) 2023 Ryan Chiang
- * Modified work Copyright (c) 2024 Jordan Harrod
+ * Updated version to work with Claude's new DOM structure
  */
 
 function addExportButtons() {
@@ -156,98 +152,198 @@ function addExportButtons() {
 
 // Function to export chat content
 function exportChat(format, excludeThinking = false) {
-  // Get chat elements
-  const container = document.querySelector("div.flex-1.flex.flex-col.gap-3.px-4");
-  if (!container) {
-    alert("Could not find chat container. Are you on a Claude chat page?");
-    return;
-  }
+  console.log('Starting export...');
   
+  // Get chat title
   const menuButton = document.querySelector("button[data-testid='chat-menu-trigger']");
   const title = menuButton?.textContent?.trim() || "Claude Chat";
-  const elements = container.querySelectorAll("div.font-claude-message, div.font-user-message");
   
   // Initialize content
   let markdownContent = `# ${title}\n\`${getFormattedDateTime()}\`\n\n`;
   
-  // Process each message
-  for (let i = 0; i < elements.length; i++) {
-    const element = elements[i];
+  // Find all message containers using multiple strategies
+  const messages = [];
+  
+  // Strategy 1: Look for containers with data-test-render-count
+  const renderContainers = document.querySelectorAll('[data-test-render-count]');
+  console.log(`Found ${renderContainers.length} render containers`);
+  
+  renderContainers.forEach(container => {
+    // Check if this container has a user message
+    const userMessage = container.querySelector('[data-testid="user-message"]');
+    if (userMessage) {
+      messages.push({
+        type: 'user',
+        element: container,
+        content: userMessage
+      });
+    }
     
-    // Handle Claude's messages vs user messages
-    if (element.classList.contains("font-claude-message")) {
+    // Check if this container has a Claude response
+    const claudeResponse = container.querySelector('[data-is-streaming]');
+    if (claudeResponse) {
+      messages.push({
+        type: 'claude',
+        element: container,
+        content: claudeResponse
+      });
+    }
+  });
+  
+  console.log(`Found ${messages.length} messages`);
+  
+  // Process each message
+  messages.forEach((message, index) => {
+    console.log(`Processing message ${index + 1}: ${message.type}`);
+    
+    if (message.type === 'user') {
+      markdownContent += "_Prompt_:\n";
+      
+      // Extract text from user message
+      const paragraphs = message.content.querySelectorAll('p');
+      paragraphs.forEach(p => {
+        markdownContent += p.textContent + '\n\n';
+      });
+    } else if (message.type === 'claude') {
       markdownContent += "_Claude_:\n";
       
-      // First, check for thinking panel (collapsible section with thinking content)
-      const thinkingPanel = element.querySelector('div[class*="font-tiempos"]');
-      const hasThinkingPanel = thinkingPanel !== null;
+      // Check for thinking sections if not excluding
+      let hasThinking = false;
+      const extractedThinkingContent = new Set(); // Track what we've already extracted
       
-      if (hasThinkingPanel && !excludeThinking) {
-        // Extract thinking content from the panel (whether open or closed)
-        const thinkingContent = thinkingPanel.querySelectorAll("p, ol, ul, pre, table");
-        if (thinkingContent.length > 0) {
-          markdownContent += "\n**Thinking:**\n";
-          thinkingContent.forEach(node => {
-            const processedContent = processContentNode(node, markdownContent, false);
-            markdownContent += processedContent;
-          });
-          markdownContent += "\n**Response:**\n";
+      if (!excludeThinking) {
+        // Look for thinking button summaries first
+        const thinkingButtons = message.element.querySelectorAll('button.group\\/row');
+        
+        thinkingButtons.forEach(button => {
+          const buttonText = button.textContent || '';
+          if (buttonText.match(/Analyzed|Pondering|Thinking|Processing|Crafted|Unraveled/i)) {
+            const buttonKey = buttonText.trim();
+            
+            // Only process if we haven't seen this thinking section before
+            if (!extractedThinkingContent.has(buttonKey)) {
+              extractedThinkingContent.add(buttonKey);
+              hasThinking = true;
+              
+              markdownContent += "\n**[Thinking]:** " + buttonKey + "\n\n";
+              
+              // The thinking content is in a sibling div after the button
+              // Look for the collapsed content container within the same parent
+              const buttonContainer = button.closest('.transition-all');
+              if (buttonContainer) {
+                // The content is in the next sibling div with tabindex="-1"
+                const contentContainer = buttonContainer.querySelector('div[tabindex="-1"].overflow-hidden');
+                if (contentContainer) {
+                  // Extract all paragraphs and lists from the thinking content
+                  const thinkingElements = contentContainer.querySelectorAll('p.whitespace-normal, li.whitespace-normal');
+                  
+                  thinkingElements.forEach(element => {
+                    const text = element.textContent.trim();
+                    if (text) {
+                      // Handle list items vs paragraphs
+                      if (element.tagName === 'LI') {
+                        markdownContent += '- ' + text + '\n';
+                      } else {
+                        markdownContent += text + '\n\n';
+                      }
+                    }
+                  });
+                }
+              }
+            }
+          }
+        });
+        
+        // Add visual separator between thinking and response
+        if (hasThinking) {
+          markdownContent += "\n---\n\n**[Response]:**\n\n";
         }
       }
       
-      // Now process the main response content
-      // Get all content nodes but exclude those within the thinking panel
-      let contentNodes;
-      if (hasThinkingPanel) {
-        // Get all nodes and filter out those inside the thinking panel
-        const allNodes = element.querySelectorAll("p, ol, ul, pre, table");
-        contentNodes = Array.from(allNodes).filter(node => {
-          // Check if this node is inside the thinking panel
-          return !thinkingPanel.contains(node);
+      // Extract main response content
+      // Look for the actual response text in various possible containers
+      const responseContainers = message.element.querySelectorAll('.font-claude-response p.whitespace-normal, [class*="grid-cols"] p.whitespace-normal');
+      
+      if (responseContainers.length > 0) {
+        responseContainers.forEach(p => {
+          const text = p.textContent.trim();
+          // Skip thinking panel content and summaries
+          if (text && !text.match(/^(Analyzed|Pondering|Thinking|Processing|Crafted|Unraveled)/i) &&
+              !p.closest('[tabindex="-1"]')) { // Skip content inside thinking panels
+            markdownContent += text + '\n\n';
+          }
         });
       } else {
-        // No thinking panel, get all content nodes
-        contentNodes = element.querySelectorAll("p, ol, ul, pre, table");
-      }
-      
-      if (contentNodes.length > 0) {
-        // Process each content node
-        contentNodes.forEach(node => {
-          const processedContent = processContentNode(node, markdownContent, false);
-          markdownContent += processedContent;
+        // Fallback: try to get any paragraph content outside thinking panels
+        const allParagraphs = message.element.querySelectorAll('p');
+        allParagraphs.forEach(p => {
+          const text = p.textContent.trim();
+          // Skip thinking content and empty paragraphs
+          if (text && 
+              !text.match(/^(This is a really interesting case study|The user pointed out|In my thinking|But then in my actual output|The user then corrected|Why did this happen|I think what happened|The reasoning reveals)/i) &&
+              !p.closest('[tabindex="-1"]') && // Skip content inside thinking panels
+              !text.match(/^(Analyzed|Pondering|Thinking|Processing|Crafted|Unraveled)/i)) {
+            markdownContent += text + '\n\n';
+          }
         });
-      } else {
-        // Fallback: try to get the text content directly
-        markdownContent += `${element.textContent.trim()}\n\n`;
       }
       
-      // Check for artifacts in Claude's message
-      // Note: PDF export functionality has been removed
-    } else {
-      // User message
-      markdownContent += "_Prompt_:\n";
+      // Handle code blocks
+      const codeBlocks = message.element.querySelectorAll('pre code');
+      codeBlocks.forEach(code => {
+        const language = code.className.match(/language-(\w+)/)?.[1] || '';
+        markdownContent += `\`\`\`${language}\n${code.textContent}\n\`\`\`\n\n`;
+      });
       
-      // Extract text content from user message
-      // First try to get structured content
-      const contentNodes = element.querySelectorAll("p, ol, ul, pre, table");
-      
-      if (contentNodes.length > 0) {
-        // Process each content node
-        contentNodes.forEach(node => {
-          const processedContent = processContentNode(node, markdownContent, excludeThinking);
-          markdownContent += processedContent;
+      // Handle lists
+      const lists = message.element.querySelectorAll('ol, ul');
+      lists.forEach(list => {
+        const items = list.querySelectorAll('li');
+        items.forEach((item, i) => {
+          if (list.tagName === 'OL') {
+            markdownContent += `${i + 1}. ${item.textContent}\n`;
+          } else {
+            markdownContent += `- ${item.textContent}\n`;
+          }
         });
-      } else {
-        // Fallback: get text content directly
-        markdownContent += `${element.textContent.trim()}\n\n`;
-      }
+        markdownContent += '\n';
+      });
     }
     
-    // Add spacing between messages
-    markdownContent += "\n";
+    markdownContent += '\n';
+  });
+  
+  // If no messages found, try alternative approach
+  if (messages.length === 0) {
+    console.log('No messages found with primary method, trying alternative...');
+    
+    // Try to find any user messages and Claude responses directly
+    const userMessages = document.querySelectorAll('[data-testid="user-message"]');
+    const claudeResponses = document.querySelectorAll('.font-claude-response');
+    
+    console.log(`Alternative found: ${userMessages.length} user messages, ${claudeResponses.length} Claude responses`);
+    
+    // Process any found messages
+    userMessages.forEach(msg => {
+      markdownContent += "_Prompt_:\n";
+      const paragraphs = msg.querySelectorAll('p');
+      paragraphs.forEach(p => {
+        markdownContent += p.textContent + '\n\n';
+      });
+      markdownContent += '\n';
+    });
+    
+    claudeResponses.forEach(resp => {
+      markdownContent += "_Claude_:\n";
+      const paragraphs = resp.querySelectorAll('p');
+      paragraphs.forEach(p => {
+        markdownContent += p.textContent + '\n\n';
+      });
+      markdownContent += '\n';
+    });
   }
   
-  // Save content to file
+  // Save the file
   const filename = excludeThinking ? `${title}-no-thinking` : title;
   saveToFile(markdownContent, "md", filename);
 }
